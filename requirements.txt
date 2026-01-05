@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+sqladmin
+pynfe
+pydantic
+python-multipart
+jinja2
+wtforms
+lxml
+signxml
+requests
+pyopenssl
+cryptography
+anyio
+starlette

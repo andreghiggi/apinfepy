@@ -6,9 +6,20 @@ from models import Base, Empresa, NotaFiscal, NotaStatus, TipoNota
 from routes import router
 import uvicorn
 
-# Configuração do Banco de Dados (SQLite para início gratuito e fácil)
-SQLALCHEMY_DATABASE_URL = "sqlite:///./nfe.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+import os
+
+# Na Vercel, o SQLite não é persistente. 
+# Para produção, você deve usar uma variável de ambiente DATABASE_URL (PostgreSQL/MySQL)
+# Se não houver, ele usa o SQLite local (apenas para teste, os dados somem ao reiniciar)
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nfe.db")
+
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, 
+    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Criar as tabelas
@@ -17,7 +28,9 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="API de Notas Fiscais (NFe/NFCe)",
     description="API para emissão de Notas Fiscais Eletrônicas (NFe) e Notas Fiscais de Consumidor Eletrônicas (NFCe)",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Incluir rotas da API
