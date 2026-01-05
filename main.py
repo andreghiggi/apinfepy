@@ -12,14 +12,21 @@ import os
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    # Usar /tmp/nfe.db para permitir escrita na Vercel (dados temporários)
+    # Fallback para SQLite apenas se não houver variável de ambiente
     DATABASE_URL = "sqlite:////tmp/nfe.db"
 elif DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+elif DATABASE_URL.startswith("mysql://"):
+    # Garante o uso do driver pymysql para MySQL
+    DATABASE_URL = DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
 
 # Configuração do Engine
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args=connect_args,
+    pool_pre_ping=True  # Ajuda a manter a conexão viva com MySQL externo
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Criar as tabelas na inicialização
