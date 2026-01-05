@@ -4,30 +4,31 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqladmin import Admin, ModelView
 from models import Base, Empresa, NotaFiscal, NotaStatus, TipoNota
 from routes import router
-import uvicorn
-
 import os
 
-# Na Vercel, o SQLite não é persistente. 
-# Para produção, você deve usar uma variável de ambiente DATABASE_URL (PostgreSQL/MySQL)
-# Se não houver, ele usa o SQLite local (apenas para teste, os dados somem ao reiniciar)
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nfe.db")
+# --- CONFIGURAÇÃO DO BANCO DE DADOS ---
+# Na Vercel, o sistema de arquivos é somente leitura. 
+# Se não houver DATABASE_URL, usamos o SQLite na pasta /tmp (única pasta com permissão de escrita)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if not DATABASE_URL:
+    # Usar /tmp/nfe.db para permitir escrita na Vercel (dados temporários)
+    DATABASE_URL = "sqlite:////tmp/nfe.db"
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
-)
+# Configuração do Engine
+connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Criar as tabelas
+# Criar as tabelas na inicialização
 Base.metadata.create_all(bind=engine)
 
+# --- INICIALIZAÇÃO DO APP ---
 app = FastAPI(
     title="API de Notas Fiscais (NFe/NFCe)",
-    description="API para emissão de Notas Fiscais Eletrônicas (NFe) e Notas Fiscais de Consumidor Eletrônicas (NFCe)",
+    description="API para emissão de Notas Fiscais Eletrônicas",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -36,8 +37,8 @@ app = FastAPI(
 # Incluir rotas da API
 app.include_router(router)
 
-# Configuração do SQLAdmin (Interface Web de Administração)
-admin = Admin(app, engine)
+# --- CONFIGURAÇÃO DO ADMIN ---
+admin = Admin(app, engine, title="Admin NFe")
 
 class EmpresaAdmin(ModelView, model=Empresa):
     column_list = [Empresa.id, Empresa.razao_social, Empresa.cnpj, Empresa.ambiente]
@@ -55,29 +56,16 @@ class NotaFiscalAdmin(ModelView, model=NotaFiscal):
 admin.add_view(EmpresaAdmin)
 admin.add_view(NotaFiscalAdmin)
 
-# Dependência para obter a sessão do banco
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @app.get("/")
 def read_root():
     return {
         "message": "API de Notas Fiscais ativa",
         "admin_url": "/admin",
         "docs_url": "/docs",
-        "versao": "1.0.0"
+        "database": "SQLite (Temporário)" if "sqlite" in DATABASE_URL else "Externo"
     }
+
+# Para rodar localmente
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("API de Notas Fiscais iniciada com sucesso!")
-    print("="*60)
-    print("\n📍 Acesse:")
-    print("   - API Docs (Swagger): http://localhost:8000/docs")
-    print("   - Admin Panel: http://localhost:8000/admin")
-    print("   - API Root: http://localhost:8000")
-    print("\n" + "="*60 + "\n")
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
