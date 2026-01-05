@@ -12,8 +12,8 @@ import os
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    # Fallback para SQLite apenas se não houver variável de ambiente
-    DATABASE_URL = "sqlite:////tmp/nfe.db"
+    # Dados da Umbler fornecidos pelo usuário
+    DATABASE_URL = "mysql+pymysql://apinfepy:k7m2y9u4@mysql741.umbler.com:41890/apinfepy"
 elif DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 elif DATABASE_URL.startswith("mysql://"):
