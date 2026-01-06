@@ -1,65 +1,39 @@
-from fastapi import FastAPI, Depends, HTTPException
+import os
+from fastapi import FastAPI
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
-from models import Base, Empresa, NotaFiscal, NotaStatus, TipoNota
+from starlette.middleware.sessions import SessionMiddleware
+
+# Importações locais
+from models import Base, Empresa, NotaFiscal
 from routes import router
-import os
 
-# --- CONFIGURAÇÃO DO BANCO DE DADOS ---
-# Na Vercel, o sistema de arquivos é somente leitura. 
-# Se não houver DATABASE_URL, usamos o SQLite na pasta /tmp (única pasta com permissão de escrita)
-DATABASE_URL = os.getenv("DATABASE_URL")
+# 1. Configuração do Banco de Dados (MySQL Umbler Forçado)
+# Usamos mysql+pymysql para garantir o driver correto
+DATABASE_URL = "mysql+pymysql://apinfepy:k7m2y9u4@mysql741.umbler.com:41890/apinfepy"
 
-if not DATABASE_URL:
-    # Dados da Umbler fornecidos pelo usuário
-    DATABASE_URL = "mysql+pymysql://apinfepy:k7m2y9u4@mysql741.umbler.com:41890/apinfepy"
-elif DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-elif DATABASE_URL.startswith("mysql://"):
-    # Garante o uso do driver pymysql para MySQL
-    DATABASE_URL = DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
-
-# Configuração do Engine
-connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 engine = create_engine(
     DATABASE_URL, 
-    connect_args=connect_args,
-    pool_pre_ping=True  # Ajuda a manter a conexão viva com MySQL externo
+    pool_pre_ping=True,
+    pool_recycle=3600
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Criar as tabelas na inicialização (Apenas se não estiver na Vercel para evitar timeout)
-if not os.getenv("VERCEL"):
-    Base.metadata.create_all(bind=engine)
-
-# --- INICIALIZAÇÃO DO APP ---
-app = FastAPI(
-    title="API de Notas Fiscais (NFe/NFCe)",
-    description="API para emissão de Notas Fiscais Eletrônicas",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
-# Incluir rotas da API
+# 2. Inicialização do FastAPI
+app = FastAPI(title="API NFe")
+app.add_middleware(SessionMiddleware, secret_key="uma-chave-muito-secreta-123")
 app.include_router(router)
 
-# --- CONFIGURAÇÃO DE AUTENTICAÇÃO ---
+# 3. Autenticação do Admin
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
         username, password = form.get("username"), form.get("password")
-
-        # Credenciais padrão (Recomendo mudar via variáveis de ambiente na Vercel)
-        ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-        ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
-
-        if username == ADMIN_USER and password == ADMIN_PASS:
-            request.session.update({"token": "autenticado"})
+        if username == "admin" and password == "admin123":
+            request.session.update({"token": "ok"})
             return True
         return False
 
@@ -68,34 +42,26 @@ class AdminAuth(AuthenticationBackend):
         return True
 
     async def authenticate(self, request: Request) -> bool:
-        token = request.session.get("token")
-        if not token:
-            return False
-        return True
+        return "token" in request.session
 
-authentication_backend = AdminAuth(secret_key=os.getenv("SECRET_KEY", "chave-secreta-muito-segura"))
+auth_backend = AdminAuth(secret_key="uma-chave-muito-secreta-123")
 
-# --- CONFIGURAÇÃO DO ADMIN ---
-admin = Admin(
-    app, 
-    engine, 
-    title="Admin NFe", 
-    authentication_backend=authentication_backend
-)
+# 4. Configuração do SQLAdmin
+admin = Admin(app, engine, authentication_backend=auth_backend, title="Painel NFe")
+
+class EmpresaAdmin(ModelView, model=Empresa):
+    column_list = [Empresa.id, Empresa.razao_social, Empresa.cnpj]
+    name = "Empresa"
+    name_plural = "Empresas"
+
+class NotaFiscalAdmin(ModelView, model=NotaFiscal):
+    column_list = [NotaFiscal.id, NotaFiscal.numero, NotaFiscal.status]
+    name = "Nota Fiscal"
+    name_plural = "Notas Fiscais"
 
 admin.add_view(EmpresaAdmin)
 admin.add_view(NotaFiscalAdmin)
 
 @app.get("/")
-def read_root():
-    return {
-        "message": "API de Notas Fiscais ativa",
-        "admin_url": "/admin",
-        "docs_url": "/docs",
-        "database": "SQLite (Temporário)" if "sqlite" in DATABASE_URL else "Externo"
-    }
-
-# Para rodar localmente
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+async def root():
+    return {"status": "online", "admin": "/admin"}
