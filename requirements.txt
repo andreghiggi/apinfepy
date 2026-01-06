@@ -16,3 +16,4 @@ anyio
 starlette
 pymysql
 cryptography
+itsdangerous

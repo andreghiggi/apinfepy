@@ -2,6 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqladmin import Admin, ModelView
+from sqladmin.authentication import AuthenticationBackend
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
 from models import Base, Empresa, NotaFiscal, NotaStatus, TipoNota
 from routes import router
 import os
@@ -45,10 +48,43 @@ app = FastAPI(
 # Incluir rotas da API
 app.include_router(router)
 
-# --- CONFIGURAÇÃO DO ADMIN (Comentado temporariamente para isolar erro 500) ---
-# admin = Admin(app, engine, title="Admin NFe")
-# admin.add_view(EmpresaAdmin)
-# admin.add_view(NotaFiscalAdmin)
+# --- CONFIGURAÇÃO DE AUTENTICAÇÃO ---
+class AdminAuth(AuthenticationBackend):
+    async def login(self, request: Request) -> bool:
+        form = await request.form()
+        username, password = form.get("username"), form.get("password")
+
+        # Credenciais padrão (Recomendo mudar via variáveis de ambiente na Vercel)
+        ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+        ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
+
+        if username == ADMIN_USER and password == ADMIN_PASS:
+            request.session.update({"token": "autenticado"})
+            return True
+        return False
+
+    async def logout(self, request: Request) -> bool:
+        request.session.clear()
+        return True
+
+    async def authenticate(self, request: Request) -> bool:
+        token = request.session.get("token")
+        if not token:
+            return False
+        return True
+
+authentication_backend = AdminAuth(secret_key=os.getenv("SECRET_KEY", "chave-secreta-muito-segura"))
+
+# --- CONFIGURAÇÃO DO ADMIN ---
+admin = Admin(
+    app, 
+    engine, 
+    title="Admin NFe", 
+    authentication_backend=authentication_backend
+)
+
+admin.add_view(EmpresaAdmin)
+admin.add_view(NotaFiscalAdmin)
 
 @app.get("/")
 def read_root():
