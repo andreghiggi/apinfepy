@@ -29,8 +29,9 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Criar as tabelas na inicialização
-Base.metadata.create_all(bind=engine)
+# Criar as tabelas na inicialização (Apenas se não estiver na Vercel para evitar timeout)
+if not os.getenv("VERCEL"):
+    Base.metadata.create_all(bind=engine)
 
 # --- INICIALIZAÇÃO DO APP ---
 app = FastAPI(
