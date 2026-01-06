@@ -45,24 +45,10 @@ app = FastAPI(
 # Incluir rotas da API
 app.include_router(router)
 
-# --- CONFIGURAÇÃO DO ADMIN ---
-admin = Admin(app, engine, title="Admin NFe")
-
-class EmpresaAdmin(ModelView, model=Empresa):
-    column_list = [Empresa.id, Empresa.razao_social, Empresa.cnpj, Empresa.ambiente]
-    form_columns = [Empresa.razao_social, Empresa.cnpj, Empresa.inscricao_estadual, Empresa.certificado_senha, Empresa.ambiente]
-    name = "Empresa"
-    name_plural = "Empresas"
-    icon = "fa-solid fa-building"
-
-class NotaFiscalAdmin(ModelView, model=NotaFiscal):
-    column_list = [NotaFiscal.id, NotaFiscal.tipo, NotaFiscal.status, NotaFiscal.numero, NotaFiscal.data_emissao, NotaFiscal.valor_total]
-    name = "Nota Fiscal"
-    name_plural = "Notas Fiscais"
-    icon = "fa-solid fa-file-invoice-dollar"
-
-admin.add_view(EmpresaAdmin)
-admin.add_view(NotaFiscalAdmin)
+# --- CONFIGURAÇÃO DO ADMIN (Comentado temporariamente para isolar erro 500) ---
+# admin = Admin(app, engine, title="Admin NFe")
+# admin.add_view(EmpresaAdmin)
+# admin.add_view(NotaFiscalAdmin)
 
 @app.get("/")
 def read_root():
